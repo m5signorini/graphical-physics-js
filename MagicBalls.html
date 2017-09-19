@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<!--
+    Bla bla bla
+-->
+<html>
+    <head>
+        <style>
+            body, html{
+                margin: 0;
+                padding: 0;
+            }
+            body {
+                overflow:hidden;                  /* Hide scrollbars */
+            }
+            canvas{
+                background-color: floralwhite;
+                position: absolute;
+                /*width: 100%;                    <-- This 'was' the viewport 
+                height: 100%; */
+            }
+            .oncanvas {
+                margin: 0;
+                padding: 1px;
+                position: relative;
+                top: 10px;
+                left: 10px;
+                user-select: none;
+            }
+            .styled {
+                text-align:center;
+                top:5px;
+                width:150px;
+                font-family:sans-serif;
+                font-size: 15px;
+            }
+            .menu {
+                position: relative;
+                width: 150px;
+            }
+        </style>
+    </head>
+    <body onload="init()">
+        <canvas id="myCanvas" width="1536" height="798"></canvas> <!-- This is the REAL size -->
+        <script>
+            
+            var canvas;
+            var ctx;
+            var interval;
+            
+            var sliderAoE;    //Area of Effect
+            var sliderIMP;
+            var sliderFR;     //Friction
+            var sliderMS;     //Milliseconds
+            var sliderRS;     //Return speed
+            var sliderRG;     //Radius growth (balls)
+            var sliderFA;     //Field acceleration
+            
+            var checkboxCM;   //Checkbox for creation mode
+            var colorCM;      //Color for creation mode
+            
+            var mouseX;
+            var mouseY;
+            
+            var radiusMouse = 200;
+            var impulse = 1;
+            var friction = 0.96;
+            var ms = 1;
+            var returnSpeed = 0.005;
+            var radiusGrowth = 0.2;
+            var fieldAccel = 0;
+            
+            var balls = [];
+            
+            var ball1 = new ball(750, 350, "red");
+            var ball2 = new ball(700, 350, "blue");
+            var ball3 = new ball(750, 300, "yellow");
+            var ball4 = new ball(800, 350, "green");
+            var ball5 = new ball(750, 400, "purple");
+            var ball6 = new ball(750, 325, "orange");
+            var ball7 = new ball(725, 350, "cyan");
+            var ball8 = new ball(750, 375, "fuchsia");
+            var ball9 = new ball(775, 350, "mediumseagreen");
+            
+            function init() {
+                canvas = document.getElementById("myCanvas");
+                ctx = canvas.getContext("2d");
+                interval = setInterval(frame, ms);
+                prepareList();
+                
+                sliderAoE = document.getElementById("rangeMR");
+                sliderIMP = document.getElementById("rangeIMP");
+                sliderFR = document.getElementById("rangeFR");
+                sliderMS = document.getElementById("rangeMS");
+                sliderRS = document.getElementById("rangeRS");
+                sliderRG = document.getElementById("rangeRG");
+                sliderFA = document.getElementById("rangeFA");
+                
+                canvas.addEventListener("mousedown", createBall);
+                checkboxCM = document.getElementById("creationCheckBox");
+                colorCM = document.getElementById("creationColorPicker");
+                
+                window.addEventListener("mousemove", mouseMove);
+                sliderAoE.addEventListener("change", modifyAreaOfEffect);
+                sliderIMP.addEventListener("change", modifyImpulse)
+                sliderFR.addEventListener("change", modifyFriction);
+                sliderMS.addEventListener("change", modifyMilliseconds);
+                sliderRS.addEventListener("change", modifyReturnSpeed);
+                sliderRG.addEventListener("change", modifyRadiusGrowth);
+                sliderFA.addEventListener("change", modifyFieldAcceleration);
+            }
+            
+            function mouseMove(e) {
+                mouseX = e.clientX;
+                mouseY = e.clientY;
+                document.getElementById("coord").innerHTML="Coordinates: " + mouseX + "<br>" + mouseY;
+            }
+            
+            /* SLIDER FUNCTIONS
+            */
+            
+            function modifyAreaOfEffect(e) {
+                radiusMouse = sliderAoE.value;
+            }
+            
+            function modifyImpulse(e) {
+                impulse = sliderIMP.value;
+            }
+            
+            function modifyFriction(e) {
+                friction = sliderFR.value;
+            }
+            
+            function modifyMilliseconds(e) {
+                ms = sliderMS.value;
+                clearInterval(interval);
+                interval = setInterval(frame, ms);
+            }
+            
+            function modifyReturnSpeed(e) {
+                returnSpeed = sliderRS.value;
+            }
+            
+            function modifyRadiusGrowth(e) {
+                radiusGrowth = sliderRG.value;
+            }
+            
+            function modifyFieldAcceleration(e) {
+                fieldAccel = sliderFA.value;
+            }
+            /* DISPLAY FUNCTIONS
+            */
+            
+            function prepareList() {
+                balls.push(ball1, ball2, ball3, ball4, ball5, ball6, ball7, ball8, ball9);
+            }
+            
+            function ball(OX, OY, color) {
+                this.initX = OX;
+                this.initY = OY;
+                this.x = this.initX;
+                this.y = this.initY;
+                this.vx = 0;
+                this.vy = 0;
+                this.angle = 0;
+                this.radius;
+                this.initRadius = 10;
+                this.color = color;
+                
+                this.draw = function() {
+                    ctx.beginPath();
+                    ctx.fillStyle = this.color;
+                    ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.closePath();
+                    
+                    this.movement();
+                }
+                
+                this.movement = function() {
+                    var dx = this.initX - this.x;
+                    var dy = this.initY - this.y;
+                    var mouseDistance = Math.sqrt(Math.pow(this.x - mouseX, 2) + Math.pow(this.y - mouseY, 2));
+                    
+                    if(mouseDistance < radiusMouse) {
+                        //If within the AOE radius of mouse...
+                        //(Use atan2 for more precise results)
+                        this.angle = Math.atan2((this.y - mouseY),(this.x - mouseX));
+                        this.vx += Math.cos(this.angle) * impulse;
+                        this.vy += Math.sin(this.angle) * impulse;
+                        
+                        //If field acceleration !=0 then apply this extra param...
+                        if(fieldAccel != 0) {
+                            this.vx /= mouseDistance * fieldAccel;
+                            this.vy /= mouseDistance * fieldAccel;
+                        }
+                    }
+                    this.x += this.vx;
+                    this.y += this.vy;
+                    
+                    this.vx += dx * returnSpeed;    //velocity relative to the distance between initX,initY - x,y (adjusted)
+                    this.vy += dy * returnSpeed;
+                    this.vx *= friction;        //Friction/Deacceleration
+                    this.vy *= friction;
+                    
+                    //If future radius won't be 0 then apply the modify radius formula:
+                    if((Math.sqrt(this.initRadius + Math.sqrt(Math.pow(dx,2) + Math.pow(dy,2))*radiusGrowth)) > 0) {
+                        this.radius = this.initRadius + Math.sqrt(Math.pow(dx,2) + Math.pow(dy,2))*radiusGrowth;
+                    }
+                }
+            }
+            
+            function displayElements() {
+                for(var i = 0; i < balls.length; i++) {
+                    balls[i].draw();
+                }
+            }
+            
+            function shuffleColors() {
+                for(var i = 0; i < balls.length; i++) {
+                    balls[i].color = '#' + Math.floor(Math.random()*16777215).toString(16);
+                }
+            }
+            
+            /* CREATION MODE
+            */
+            
+            function checkboxFunction() {
+                switch (checkboxCM.checked) {
+                    case true: //CREATION MODE: on
+                        canvas.addEventListener("mousedown", createBall);
+                        break;
+
+                    case false: //CREATION MODE: off
+                        canvas.removeEventListener("mousedown", createBall);
+                        break;
+                   }
+            }
+            
+            function createBall() {
+                var ox = mouseX;
+                var oy = mouseY;
+                var colorPicked = colorCM.value;
+                
+                var ballN = new ball(ox, oy, colorPicked);
+                balls.push(ballN);
+            }
+            
+            /* FRAME FUNCTION
+            */
+            
+            function frame() {
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                displayElements();
+            }
+            
+            /* RESET
+            */
+            
+            function erase() {
+                for(var i = 0; i < balls.length; i++) {
+                    balls[i] = null;
+                }
+                balls.splice(0, balls.length);
+            }
+            
+        </script>
+        
+        <div>
+            <button class="oncanvas" style="font-family:sans-serif" onclick="shuffleColors()">A beautifool button</button>
+            <p id="coord" class="oncanvas" style="width: 100px; height: 55px">Coordinates:</p>
+        </div>
+        
+        
+        <div id="sliderList" class="menu" style="bottom:-10px;">
+            <p class="oncanvas styled">Area of Effect</p>
+            <input id="rangeMR" class="oncanvas styled" type="range" min="5" max="500" step="1" value="200">
+            
+            <p class="oncanvas styled">Impulse</p>
+            <input id="rangeIMP" class="oncanvas styled" type="range" min="-2" max="2" step="0.05" value="1">
+            
+            <p class="oncanvas styled">Friction</p>
+            <input id="rangeFR" class="oncanvas styled" type="range" min="0.01" max="1" step="0.01" value="0.96" style="transform: rotateY(180deg)">
+            
+            <p class="oncanvas styled">Delay in ms</p>
+            <input id="rangeMS" class="oncanvas styled" type="range" min="1" max="30" step="1" value="1">
+            
+            <p class="oncanvas styled">Return Speed</p>
+            <input id="rangeRS" class="oncanvas styled" type="range" min="0" max="0.01" step="0.0005" value="0.005">
+            
+            <p class="oncanvas styled">Ball Growth</p>
+            <input id="rangeRG" class="oncanvas styled" type="range" min="-1" max="1" step="0.01" value="0.2">
+            
+            <p class="oncanvas styled">Field Acceleration</p>
+            <input id="rangeFA" class="oncanvas styled" type="range" min="-0.1" max="0.1" step="0.01" value="0">
+        </div>
+        
+        
+        <div id="creationModeMenu" class="menu" style="bottom:-50px;">
+            <p class="oncanvas styled">Create your own ball?</p>
+            <input id="creationCheckBox" class="oncanvas styled" type="checkbox" onchange="checkboxFunction()" checked>
+            
+            <p class="oncanvas styled">Choose a color here</p>
+            <input id="creationColorPicker" class="oncanvas styled" type="color">
+        </div>
+        
+        
+        <div id="eraseMenu" class="menu" style="bottom: -300px;">
+            <button id="eraser" class="oncanvas" style="width: 100px; left: 30px" onclick="erase()">Erase ALL :(</button>
+        </div>
+    </body>
+</html>
